@@ -40,10 +40,6 @@ ma_svy <- ma_replicate %>%
   filter(PINCP>0 | POBP !=366)
 ```
 
-
-#MA 2016-2020 income/Education/Citizenship
-```{r}
-
 ##Income
 ma_income_se<-ma_svy %>% 
   survey_count(POBP,PINCP)
