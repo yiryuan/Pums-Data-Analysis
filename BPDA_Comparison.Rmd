@@ -1,0 +1,735 @@
+---
+title: "BPDA_Comparison"
+author: "Yirong Yuan"
+date: "2022-12-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+library(tidycensus)
+library(magrittr)
+library(tidyr)
+library(dplyr)
+library(tidyverse)
+library(survey)
+library(srvyr)
+```
+
+##MA get pums data
+```{r}
+variable_list <-c("ST","POBP","PINCP","AGEP","SCHL","CIT")
+ma_replicate <- get_pums(
+  variables = variable_list,
+  state = 'MA',
+  year = 2021,
+  survey = "acs1",
+  variables_filter = list(POBP = 359:374,CIT=4:5),
+  rep_weights = "person"
+)
+
+ma_replicate$PINCP = as.numeric(ma_replicate$PINCP)
+ma_svy <- ma_replicate %>%
+  to_survey(type = "person", 
+            design = "rep_weights") %>%
+  filter(PINCP>0 | POBP !=366)
+```
+
+
+#MA 2016-2020 income/Education/Citizenship
+```{r}
+
+##Income
+ma_income_se<-ma_svy %>% 
+  survey_count(POBP,PINCP)
+
+ma_income_summary<- ma_svy %>% 
+  mutate(
+    race_ethnicity = case_when(
+      POBP == "360"~"Argentina",
+      POBP == "361"~"Bolivia",
+      POBP == "362"~"Brazil",
+      POBP == "363"~"Chile",
+      POBP == "364"~"Colombia",
+      POBP == "365"~"Ecuador",
+      POBP == "367"~"French Guiana",
+      POBP == "368"~"Guyana",
+      POBP == "369"~"Paraguay",
+      POBP == "370"~"Peru",
+      POBP == "371"~"Suriname",
+      POBP == "372"~"Uruguay",
+      POBP == "373"~"Venezuela")) %>% 
+  group_by(race_ethnicity) %>% 
+  summarize(Income=survey_mean(PINCP))
+
+ma_income_summary_moe <- ma_income_summary %>%
+  mutate(Income_moe = Income_se * 1.645,
+         label = paste(race_ethnicity)) 
+
+ggplot(ma_income_summary_moe, aes(x = Income, 
+                               y = reorder(label, 
+                                           Income))) +
+  geom_errorbar(aes(xmin = Income - Income_moe, 
+                    xmax = Income + Income_moe)) +
+  geom_point(size = 3, color = "navy") +
+  labs(title = "Personal Earnings (excl 0 and neg) in MA",
+       x = "2021 ACS estimate (from PUMS data)",
+       y = "")+
+  scale_x_continuous(labels = scales::number) + 
+  theme_grey(base_size = 12)
+
+##Education
+ma_education_se<-ma_svy %>% 
+  survey_count(POBP,AGEP,SCHL)
+
+ma_education_summary<- ma_svy %>% 
+  mutate(
+    race_ethnicity = case_when(
+      POBP == "360"~"Argentina",
+      POBP == "361"~"Bolivia",
+      POBP == "362"~"Brazil",
+      POBP == "363"~"Chile",
+      POBP == "364"~"Colombia",
+      POBP == "365"~"Ecuador",
+      POBP == "367"~"French Guiana",
+      POBP == "368"~"Guyana",
+      POBP == "369"~"Paraguay",
+      POBP == "370"~"Peru",
+      POBP == "371"~"Suriname",
+      POBP == "372"~"Uruguay",
+      POBP == "373"~"Venezuela"),
+    education_status  = case_when((SCHL>=21) & (SCHL<=24) ~ 'Bachelors or Higher'),
+    above_25 = AGEP>25) %>% 
+  filter(education_status != "Other")%>% 
+  group_by(race_ethnicity,education_status) %>% 
+  summarize(age_above_25=survey_mean(above_25))
+
+ma_education_summary_moe <- ma_education_summary %>%
+  mutate(age_above_25_moe = age_above_25_se * 1.645,
+         label = paste(race_ethnicity,education_status,sep =",")) 
+
+ggplot(ma_education_summary_moe, aes(x = age_above_25, 
+                               y = reorder(label, 
+                                           age_above_25))) +
+  geom_errorbar(aes(xmin = age_above_25 - age_above_25_moe, 
+                    xmax = age_above_25 + age_above_25_moe)) +
+  geom_point(size = 3, color = "navy") +
+  labs(title = "Educational Attainment of aged 25 or over in MA",
+       x = "2021 ACS estimate (from PUMS data)",
+       y = "")+
+  scale_x_continuous(labels = scales::percent) + 
+  theme_grey(base_size = 12)
+
+##citzenship
+ma_cit_se<-ma_svy %>% 
+  survey_count(POBP,CIT)
+
+ma_cit_summary<- ma_svy %>% 
+  mutate(
+    race_ethnicity = case_when(
+      POBP == "360"~"Argentina",
+      POBP == "361"~"Bolivia",
+      POBP == "362"~"Brazil",
+      POBP == "363"~"Chile",
+      POBP == "364"~"Colombia",
+      POBP == "365"~"Ecuador",
+      POBP == "367"~"French Guiana",
+      POBP == "368"~"Guyana",
+      POBP == "369"~"Paraguay",
+      POBP == "370"~"Peru",
+      POBP == "371"~"Suriname",
+      POBP == "372"~"Uruguay",
+      POBP == "373"~"Venezuela"),
+    Pop = (CIT == 5)	
+) %>% 
+  group_by(race_ethnicity) %>% 
+  summarize(Pop=survey_mean(Pop))
+
+citizenship = "Not a citizen of the U.S."
+ma_cit_summary_moe <- ma_cit_summary %>%
+  mutate(Pop_moe = Pop_se * 1.645,
+         label = paste(race_ethnicity, citizenship,sep=",")) 
+
+ggplot(ma_cit_summary_moe, aes(x = Pop, 
+                               y = reorder(label, 
+                                           Pop))) +
+  geom_errorbar(aes(xmin = Pop - Pop_moe, 
+                    xmax = Pop + Pop_moe)) +
+  geom_point(size = 3, color = "navy") +
+  labs(title = "Citizenship in MA",
+       x = "2021 ACS estimate (from PUMS data)",
+       y = "")+
+  scale_x_continuous(labels = scales::percent) + 
+  theme_grey(base_size = 12)
+
+```
+
+
+#FL pums get data
+```{r}
+fl_replicate <- get_pums(
+  variables = c("POBP","PINCP","AGEP","SCHL","CIT"),
+  state = "FL",
+  year = 2021,
+  survey = "acs1",
+  variables_filter = list(POBP = 359:374,CIT=4:5),
+  rep_weights = "person"
+)
+fl_replicate$PINCP = as.numeric(fl_replicate$PINCP)
+fl_svy <- fl_replicate %>%
+  to_survey(type = "person", 
+            design = "rep_weights") %>%
+  filter(PINCP>0 | POBP !=366)
+```
+
+
+#FL 2016-2020 income/Education/Citizenship
+```{r}
+
+##Income
+fl_income_se<-fl_svy %>% 
+  survey_count(POBP,PINCP)
+
+fl_income_summary<- fl_svy %>% 
+  mutate(
+    race_ethnicity = case_when(
+      POBP == "360"~"Argentina",
+      POBP == "361"~"Bolivia",
+      POBP == "362"~"Brazil",
+      POBP == "363"~"Chile",
+      POBP == "364"~"Colombia",
+      POBP == "365"~"Ecuador",
+      POBP == "367"~"French Guiana",
+      POBP == "368"~"Guyana",
+      POBP == "369"~"Paraguay",
+      POBP == "370"~"Peru",
+      POBP == "371"~"Suriname",
+      POBP == "372"~"Uruguay",
+      POBP == "373"~"Venezuela")) %>% 
+  group_by(race_ethnicity) %>% 
+  summarize(Income=survey_mean(PINCP))
+
+fl_income_summary_moe <- fl_income_summary %>%
+  mutate(Income_moe = Income_se * 1.645,
+         label = paste(race_ethnicity)) 
+
+ggplot(fl_income_summary_moe, aes(x = Income, 
+                               y = reorder(label, 
+                                           Income))) +
+  geom_errorbar(aes(xmin = Income - Income_moe, 
+                    xmax = Income + Income_moe)) +
+  geom_point(size = 3, color = "navy") +
+  labs(title = "Personal Earnings (excl 0 and neg) in FL",
+       x = "2021 ACS estimate (from PUMS data)",
+       y = "")+
+  scale_x_continuous(labels = scales::number) + 
+  theme_grey(base_size = 12)
+
+##Education
+fl_education_se<-fl_svy %>% 
+  survey_count(POBP,AGEP,SCHL)
+
+fl_education_summary<- fl_svy %>% 
+  mutate(
+    race_ethnicity = case_when(
+      POBP == "360"~"Argentina",
+      POBP == "361"~"Bolivia",
+      POBP == "362"~"Brazil",
+      POBP == "363"~"Chile",
+      POBP == "364"~"Colombia",
+      POBP == "365"~"Ecuador",
+      POBP == "367"~"French Guiana",
+      POBP == "368"~"Guyana",
+      POBP == "369"~"Paraguay",
+      POBP == "370"~"Peru",
+      POBP == "371"~"Suriname",
+      POBP == "372"~"Uruguay",
+      POBP == "373"~"Venezuela"),
+    education_status  = case_when((SCHL>=21) & (SCHL<=24) ~ 'Bachelors or Higher'),
+    above_25 = AGEP>25) %>% 
+  filter(education_status != "Other")%>% 
+  group_by(race_ethnicity,education_status) %>% 
+  summarize(age_above_25=survey_mean(above_25))
+
+fl_education_summary_moe <- fl_education_summary %>%
+  mutate(age_above_25_moe = age_above_25_se * 1.645,
+         label = paste(race_ethnicity,education_status,sep =",")) 
+
+ggplot(fl_education_summary_moe, aes(x = age_above_25, 
+                               y = reorder(label, 
+                                           age_above_25))) +
+  geom_errorbar(aes(xmin = age_above_25 - age_above_25_moe, 
+                    xmax = age_above_25 + age_above_25_moe)) +
+  geom_point(size = 3, color = "navy") +
+  labs(title = "Educational Attainment of aged 25 or over in FL",
+       x = "2021 ACS estimate (from PUMS data)",
+       y = "")+
+  scale_x_continuous(labels = scales::percent) + 
+  theme_grey(base_size = 12)
+
+##citzenship
+fl_cit_se<-fl_svy %>% 
+  survey_count(POBP,CIT)
+
+fl_cit_summary<- fl_svy %>% 
+  mutate(
+    race_ethnicity = case_when(
+      POBP == "360"~"Argentina",
+      POBP == "361"~"Bolivia",
+      POBP == "362"~"Brazil",
+      POBP == "363"~"Chile",
+      POBP == "364"~"Colombia",
+      POBP == "365"~"Ecuador",
+      POBP == "367"~"French Guiana",
+      POBP == "368"~"Guyana",
+      POBP == "369"~"Paraguay",
+      POBP == "370"~"Peru",
+      POBP == "371"~"Suriname",
+      POBP == "372"~"Uruguay",
+      POBP == "373"~"Venezuela"),
+    Pop = (CIT == 5)	
+) %>% 
+  group_by(race_ethnicity) %>% 
+  summarize(Pop=survey_mean(Pop))
+
+citizenship = "Not a citizen of the U.S."
+fl_cit_summary_moe <- fl_cit_summary %>%
+  mutate(Pop_moe = Pop_se * 1.645,
+         label = paste(race_ethnicity, citizenship,sep=",")) 
+
+ggplot(fl_cit_summary_moe, aes(x = Pop, 
+                               y = reorder(label, 
+                                           Pop))) +
+  geom_errorbar(aes(xmin = Pop - Pop_moe, 
+                    xmax = Pop + Pop_moe)) +
+  geom_point(size = 3, color = "navy") +
+  labs(title = "Citizenship in FL",
+       x = "2021 ACS estimate (from PUMS data)",
+       y = "")+
+  scale_x_continuous(labels = scales::percent) + 
+  theme_grey(base_size = 12)
+
+```
+
+
+##CA get pums data
+```{r}
+ca_replicate <- get_pums(
+  variables = c("POBP","PINCP","AGEP","SCHL","CIT"),
+  state = "CA",
+  year = 2021,
+  survey = "acs1",
+  variables_filter = list(POBP = 359:374,CIT=4:5),
+  rep_weights = "person"
+)
+ca_replicate$PINCP = as.numeric(ca_replicate$PINCP)
+ca_svy <- ca_replicate %>%
+  to_survey(type = "person", 
+            design = "rep_weights") %>%
+  filter(PINCP>0 | POBP !=366)
+```
+
+
+#CA 2016-2020 income/Education/Citizenship
+```{r}
+
+##Income
+ca_income_se<-ca_svy %>% 
+  survey_count(POBP,PINCP)
+
+ca_income_summary<- ca_svy %>% 
+  mutate(
+    race_ethnicity = case_when(
+      POBP == "360"~"Argentina",
+      POBP == "361"~"Bolivia",
+      POBP == "362"~"Brazil",
+      POBP == "363"~"Chile",
+      POBP == "364"~"Colombia",
+      POBP == "365"~"Ecuador",
+      POBP == "367"~"French Guiana",
+      POBP == "368"~"Guyana",
+      POBP == "369"~"Paraguay",
+      POBP == "370"~"Peru",
+      POBP == "371"~"Suriname",
+      POBP == "372"~"Uruguay",
+      POBP == "373"~"Venezuela")) %>% 
+  group_by(race_ethnicity) %>% 
+  summarize(Income=survey_mean(PINCP))
+
+ca_income_summary_moe <- ca_income_summary %>%
+  mutate(Income_moe = Income_se * 1.645,
+         label = paste(race_ethnicity)) 
+
+ggplot(ca_income_summary_moe, aes(x = Income, 
+                               y = reorder(label, 
+                                           Income))) +
+  geom_errorbar(aes(xmin = Income - Income_moe, 
+                    xmax = Income + Income_moe)) +
+  geom_point(size = 3, color = "navy") +
+  labs(title = "Personal Earnings (excl 0 and neg) in CA",
+       x = "2021 ACS estimate (from PUMS data)",
+       y = "")+
+  scale_x_continuous(labels = scales::number) + 
+  theme_grey(base_size = 12)
+
+##Education
+ca_education_se<-ca_svy %>% 
+  survey_count(POBP,AGEP,SCHL)
+
+ca_education_summary<- ca_svy %>% 
+  mutate(
+    race_ethnicity = case_when(
+      POBP == "360"~"Argentina",
+      POBP == "361"~"Bolivia",
+      POBP == "362"~"Brazil",
+      POBP == "363"~"Chile",
+      POBP == "364"~"Colombia",
+      POBP == "365"~"Ecuador",
+      POBP == "367"~"French Guiana",
+      POBP == "368"~"Guyana",
+      POBP == "369"~"Paraguay",
+      POBP == "370"~"Peru",
+      POBP == "371"~"Suriname",
+      POBP == "372"~"Uruguay",
+      POBP == "373"~"Venezuela"),
+    education_status  = case_when((SCHL>=21) & (SCHL<=24) ~ 'Bachelors or Higher'),
+    above_25 = AGEP>25) %>% 
+  filter(education_status != "Other")%>% 
+  group_by(race_ethnicity,education_status) %>% 
+  summarize(age_above_25=survey_mean(above_25))
+
+ca_education_summary_moe <- ca_education_summary %>%
+  mutate(age_above_25_moe = age_above_25_se * 1.645,
+         label = paste(race_ethnicity,education_status,sep =",")) 
+
+ggplot(ca_education_summary_moe, aes(x = age_above_25, 
+                               y = reorder(label, 
+                                           age_above_25))) +
+  geom_errorbar(aes(xmin = age_above_25 - age_above_25_moe, 
+                    xmax = age_above_25 + age_above_25_moe)) +
+  geom_point(size = 3, color = "navy") +
+  labs(title = "Educational Attainment of aged 25 or over in CA",
+       x = "2021 ACS estimate (from PUMS data)",
+       y = "")+
+  scale_x_continuous(labels = scales::percent) + 
+  theme_grey(base_size = 12)
+
+##citzenship
+ca_cit_se<-ca_svy %>% 
+  survey_count(POBP,CIT)
+
+ca_cit_summary<- ca_svy %>% 
+  mutate(
+    race_ethnicity = case_when(
+      POBP == "360"~"Argentina",
+      POBP == "361"~"Bolivia",
+      POBP == "362"~"Brazil",
+      POBP == "363"~"Chile",
+      POBP == "364"~"Colombia",
+      POBP == "365"~"Ecuador",
+      POBP == "367"~"French Guiana",
+      POBP == "368"~"Guyana",
+      POBP == "369"~"Paraguay",
+      POBP == "370"~"Peru",
+      POBP == "371"~"Suriname",
+      POBP == "372"~"Uruguay",
+      POBP == "373"~"Venezuela"),
+    Pop = (CIT == 5)	
+) %>% 
+  group_by(race_ethnicity) %>% 
+  summarize(Pop=survey_mean(Pop))
+
+citizenship = "Not a citizen of the U.S."
+ca_cit_summary_moe <- ca_cit_summary %>%
+  mutate(Pop_moe = Pop_se * 1.645,
+         label = paste(race_ethnicity, citizenship,sep=",")) 
+
+ggplot(ca_cit_summary_moe, aes(x = Pop, 
+                               y = reorder(label, 
+                                           Pop))) +
+  geom_errorbar(aes(xmin = Pop - Pop_moe, 
+                    xmax = Pop + Pop_moe)) +
+  geom_point(size = 3, color = "navy") +
+  labs(title = "Citizenship in CA",
+       x = "2021 ACS estimate (from PUMS data)",
+       y = "")+
+  scale_x_continuous(labels = scales::percent) + 
+  theme_grey(base_size = 12)
+
+```
+
+
+##MA income get data brazil
+```{r}
+MA_brazil_to_model <- get_pums(
+  variables = c("SEX","AGEP", "SCHL", "PINCP", 
+                "COW", "ESR", "MAR", "CIT","ENG","POBP"),
+  state = "MA",
+  survey = "acs1",
+  year = 2021,
+  variables_filter = list(POBP = 362,CIT=4:5),
+  rep_weights = "person"
+)
+```
+
+##data clean
+```{r}
+MA_brazil_recoded <- MA_brazil_to_model %>%
+  mutate(
+    emp_type = case_when(
+      COW %in% c("1", "2") ~ "private",
+      COW %in% c("3", "4", "5") ~ "public",
+      TRUE ~ "self"
+      ), 
+    married = case_when(
+      MAR == 1 ~ "yes",
+      TRUE ~ "no"
+    ),
+    college = case_when(
+      SCHL %in% as.character(21:24) ~ "yes",
+      TRUE ~ "no"
+    ),
+    sex = case_when(
+      SEX == 2 ~ "female",
+      TRUE ~ "male"
+    ),
+    citizen = case_when(
+      CIT %in% as.character(1:4) ~ "yes",
+      TRUE ~ "no"
+    ),
+     english = case_when(
+      ENG %in% c("b","1","2") ~ "yes",
+      TRUE ~ "no"
+    )
+  )
+
+MA_brazil_recoded$PINCP <- as.numeric(MA_brazil_recoded$PINCP)
+MA_brazil_recoded$AGEP <-as.numeric(MA_brazil_recoded$AGEP)
+
+MA_brazi_model_svy <- MA_brazil_recoded %>% 
+  to_survey() %>%
+  filter(
+    ESR == 1,   # civilian employed
+    PINCP > 0,   # earned wages last year
+    AGEP >= 25 #older than 25
+  ) %>%
+  rename(age = AGEP, pincp = PINCP)
+
+```
+
+##MA income model
+```{r}
+MA_brazil_model <- svyglm(
+  formula = log(pincp) ~ citizen + sex + age + emp_type + married + college + english,
+  design = MA_brazi_model_svy
+) 
+
+summary(MA_brazil_model)
+```
+
+
+##FL income get data brazil
+```{r}
+FL_brazil_to_model <- get_pums(
+  variables = c("SEX","AGEP", "SCHL", "PINCP", 
+                "COW", "ESR", "MAR", "CIT","ENG","POBP"),
+  state = "FL",
+  survey = "acs1",
+  year = 2021,
+  variables_filter = list(POBP = 362,CIT=4:5),
+  rep_weights = "person"
+)
+```
+
+
+##FL data clean
+```{r}
+FL_brazil_recoded <- FL_brazil_to_model %>%
+  mutate(
+    emp_type = case_when(
+      COW %in% c("1", "2") ~ "private",
+      COW %in% c("3", "4", "5") ~ "public",
+      TRUE ~ "self"
+      ), 
+    married = case_when(
+      MAR == 1 ~ "yes",
+      TRUE ~ "no"
+    ),
+    college = case_when(
+      SCHL %in% as.character(21:24) ~ "yes",
+      TRUE ~ "no"
+    ),
+    sex = case_when(
+      SEX == 2 ~ "female",
+      TRUE ~ "male"
+    ),
+    citizen = case_when(
+      CIT %in% as.character(1:4) ~ "yes",
+      TRUE ~ "no"
+    ),
+     english = case_when(
+      ENG %in% c("b","1","2") ~ "yes",
+      TRUE ~ "no"
+    )
+  )
+FL_brazil_recoded$PINCP <- as.numeric(FL_brazil_recoded$PINCP)
+FL_brazil_recoded$AGEP <-as.numeric(FL_brazil_recoded$AGEP)
+
+FL_brazi_model_svy <- FL_brazil_recoded %>% 
+  to_survey() %>%
+  filter(
+    ESR == 1,   # civilian employed
+    PINCP > 0,   # earned wages last year
+    AGEP >= 25 #older than 25
+  ) %>%
+  rename(age = AGEP, pincp = PINCP)
+
+```
+
+##FL income model
+```{r}
+FL_brazil_model <- svyglm(
+  formula = log(pincp) ~ citizen + sex + age + emp_type + married + college + english,
+  design = FL_brazi_model_svy
+) 
+
+summary(FL_brazil_model)
+```
+
+
+##CA income get data brazil
+```{r}
+CA_brazil_to_model <- get_pums(
+  variables = c("SEX","AGEP", "SCHL", "PINCP", 
+                "COW", "ESR", "MAR", "CIT","ENG","POBP"),
+  state = "CA",
+  survey = "acs1",
+  year = 2021,
+  variables_filter = list(POBP = 362,CIT=4:5),
+  rep_weights = "person"
+)
+```
+
+
+##CA data clean
+```{r}
+CA_brazil_recoded <- CA_brazil_to_model %>%
+  mutate(
+    emp_type = case_when(
+      COW %in% c("1", "2") ~ "private",
+      COW %in% c("3", "4", "5") ~ "public",
+      TRUE ~ "self"
+      ), 
+    married = case_when(
+      MAR == 1 ~ "yes",
+      TRUE ~ "no"
+    ),
+    college = case_when(
+      SCHL %in% as.character(21:24) ~ "yes",
+      TRUE ~ "no"
+    ),
+    sex = case_when(
+      SEX == 2 ~ "female",
+      TRUE ~ "male"
+    ),
+    citizen = case_when(
+      CIT %in% as.character(1:4) ~ "yes",
+      TRUE ~ "no"
+    ),
+     english = case_when(
+      ENG %in% c("b","1","2") ~ "yes",
+      TRUE ~ "no"
+    )
+  )
+
+CA_brazil_recoded$PINCP <- as.numeric(CA_brazil_recoded$PINCP)
+CA_brazil_recoded$AGEP <-as.numeric(CA_brazil_recoded$AGEP)
+
+CA_brazi_model_svy <- CA_brazil_recoded %>% 
+  to_survey() %>%
+  filter(
+    ESR == 1,   # civilian employed
+    PINCP > 0,   # earned wages last year
+    AGEP >= 25 #older than 25
+  ) %>%
+  rename(age = AGEP, pincp = PINCP)
+
+
+```
+
+##CA income model
+```{r}
+CA_brazil_model <- svyglm(
+  formula = log(pincp) ~ citizen + sex + age + emp_type + married + college + english,
+  design = CA_brazi_model_svy
+) 
+
+
+summary(CA_brazil_model)
+
+```
+
+
+## Entire population in MA & FL & CA
+```{r}
+variable_list<-c("SEX","AGEP", "SCHL", "PINCP", 
+                "COW", "ESR", "MAR", "CIT","ENG","POBP")
+st_list <-c('CA','FL','MA')	
+entire_US_to_model <- get_pums(variables = variable_list,	
+                     survey = 'acs1', state = st_list, 
+                     year = 2021, show_call=T,
+                     rep_weights = "person"
+)
+
+entire_US_recoded <- entire_US_to_model %>%
+  mutate(
+    emp_type = case_when(
+      COW %in% c("1", "2") ~ "private",
+      COW %in% c("3", "4", "5") ~ "public",
+      TRUE ~ "self"
+      ), 
+    married = case_when(
+      MAR == 1 ~ "yes",
+      TRUE ~ "no"
+    ),
+    college = case_when(
+      SCHL %in% as.character(21:24) ~ "yes",
+      TRUE ~ "no"
+    ),
+    sex = case_when(
+      SEX == 2 ~ "female",
+      TRUE ~ "male"
+    ),
+    citizen = case_when(
+      CIT %in% as.character(1:4) ~ "yes",
+      TRUE ~ "no"
+    ),
+     english = case_when(
+      ENG %in% c("b","1","2") ~ "yes",
+      TRUE ~ "no"
+    )
+  )
+entire_US_recoded$PINCP <- as.numeric(entire_US_recoded$PINCP)
+entire_US_recoded$AGEP <-as.numeric(entire_US_recoded$AGEP)
+
+entire_US_model_svy  <- entire_US_recoded %>% 
+  to_survey(type = "person", class = "srvyr",design = "rep_weights") %>%
+  filter(
+    ESR == 1,   # civilian employed
+    PINCP > 0,   # earned wages last year
+    AGEP >= 25 #older than 25
+  ) %>%
+  rename(age = AGEP, pincp = PINCP)
+
+entire_US_model <- svyglm(
+  formula = log(pincp) ~ citizen + sex + age + emp_type  + married + college + english,
+  design = entire_US_model_svy
+) 
+summary(entire_US_model)
+```
+
