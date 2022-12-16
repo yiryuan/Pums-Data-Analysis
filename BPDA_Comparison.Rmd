@@ -166,7 +166,7 @@ ggplot(ma_cit_summary_moe, aes(x = Pop,
 ```
 
 
-#FL pums get data
+##FL pums get data
 ```{r}
 fl_replicate <- get_pums(
   variables = c("POBP","PINCP","AGEP","SCHL","CIT"),
@@ -225,7 +225,7 @@ ggplot(fl_income_summary_moe, aes(x = Income,
        y = "")+
   scale_x_continuous(labels = scales::number) + 
   theme_grey(base_size = 12)
-
+```
 ##Education
 fl_education_se<-fl_svy %>% 
   survey_count(POBP,AGEP,SCHL)
