@@ -40,6 +40,10 @@ ma_svy <- ma_replicate %>%
   filter(PINCP>0 | POBP !=366)
 ```
 
+
+#MA income/Education/Citizenship
+```{r}
+
 ##Income
 ma_income_se<-ma_svy %>% 
   survey_count(POBP,PINCP)
@@ -166,7 +170,7 @@ ggplot(ma_cit_summary_moe, aes(x = Pop,
 ```
 
 
-##FL pums get data
+#FL pums get data
 ```{r}
 fl_replicate <- get_pums(
   variables = c("POBP","PINCP","AGEP","SCHL","CIT"),
@@ -184,7 +188,7 @@ fl_svy <- fl_replicate %>%
 ```
 
 
-#FL 2016-2020 income/Education/Citizenship
+#FL  income/Education/Citizenship
 ```{r}
 
 ##Income
@@ -225,7 +229,7 @@ ggplot(fl_income_summary_moe, aes(x = Income,
        y = "")+
   scale_x_continuous(labels = scales::number) + 
   theme_grey(base_size = 12)
-```
+
 ##Education
 fl_education_se<-fl_svy %>% 
   survey_count(POBP,AGEP,SCHL)
@@ -331,7 +335,7 @@ ca_svy <- ca_replicate %>%
 ```
 
 
-#CA 2016-2020 income/Education/Citizenship
+#CA income/Education/Citizenship
 ```{r}
 
 ##Income
@@ -460,7 +464,7 @@ ggplot(ca_cit_summary_moe, aes(x = Pop,
 ```
 
 
-##MA income get data brazil
+##MA income model data brazil
 ```{r}
 MA_brazil_to_model <- get_pums(
   variables = c("SEX","AGEP", "SCHL", "PINCP", 
